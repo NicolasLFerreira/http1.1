@@ -1,72 +1,76 @@
 use std::collections::HashMap;
+use std::str::from_utf8;
 
 fn main() {
-    let sep: [u8; 4] = [0x0D, 0x0A, 0x0D, 0x0A];
-
     let request = "\
-    GET /path HTTP/1.1\n\
-    Host: example.com\n\
-    Connection: keep-alive\n\
-    \n\
-    This is something\n\
-    blah blah blah";
+    GET /path HTTP/1.1\r\n\
+    Host: example.com\r\n\
+    Connection: keep-alive\r\n\
+    \r\n\
+    This is something\r\n\
+    blah blah blah\r\n";
 
-    dbg!(parser(request));
+    let bytes: Vec<u8> = str_to_bytes(request);
+
+    dbg!(&bytes);
+    dbg!(parser_bytes(bytes));
 }
 
-fn parser(request: &str) -> HttpRequest {
-    let mut http_request = HttpRequest::default();
+fn str_to_bytes(string: &str) -> Vec<u8> {
+    string.chars().map(|c| c as u8).collect()
+}
 
-    let headers_end = request
-        .find("\r\n\r\n")
-        .or_else(|| request.find("\n\n"))
-        .unwrap()
-        + 4;
+fn parser_bytes(bytes: Vec<u8>) -> HttpRequest {
+    const SEPARATOR: &[u8; 4] = &[0x0D, 0x0A, 0x0D, 0x0A];
+    let mut request = HttpRequest::default();
 
-    http_request.body = request[headers_end..].to_string();
-
-    let headers = &request[..headers_end];
-    let mut lines = headers.lines();
-
-    // request line
-    if let Some(request_line) = lines.next() {
-        let mut rl = HttpRequestLine::default();
-        let parts: Vec<&str> = request_line.split_whitespace().collect();
-        match parts[0] {
-            "GET" => rl.method = HttpMethod::GET,
-            "POST" => rl.method = HttpMethod::POST,
-            "PUT" => rl.method = HttpMethod::PUT,
-            _ => { /* error handling */ }
-        }
-        rl.path = String::from(parts[1]);
-        rl.version = String::from(parts[2]);
-
-        http_request.request_line = rl;
+    if bytes.len() < 4 {
+        panic!();
     }
 
-    // headers
-    while let Some(line) = lines.next() {
-        let line = line.trim();
-        if line.is_empty() {
-            // end of headers
+    let mut separator_index = 0;
+    let mut windows = bytes.windows(4);
+    while let Some(window) = windows.next() {
+        if window == SEPARATOR {
             break;
         }
+        separator_index += 1;
+    }
 
-        if let Some((key, value)) = line.split_once(':') {
-            let key = key.trim();
-            let value = value.trim();
-            match key {
-                "Host" => http_request.host = value.to_string(),
-                _ => {
-                    http_request
-                        .headers
-                        .insert(key.to_string(), value.to_string());
-                }
-            }
+    let header_lines: Vec<&[u8]> = (&bytes[0..separator_index]).split(|c| *c == 0x0D).map(|l| &l[1..]).collect();
+    let body = &bytes[separator_index + 4..];
+
+    // Process request line
+    {
+        let request_line = str::from_utf8(header_lines[0]).unwrap();
+        let parts: Vec<&str> = request_line.split(|c| c == ' ').collect();
+
+        request.request_line = HttpRequestLine {
+            method: HttpMethod::from_string(parts[0]),
+            path: parts[1].to_string(),
+            version: parts[2].to_string(),
         }
     }
 
-    http_request
+    for line in &header_lines[1..] {
+        let kv = {
+            let kv = line.split(|x| *x == 0x3A).collect::<Vec<_>>();
+            (
+                str::from_utf8(kv[0]).unwrap(),
+                str::from_utf8(&kv[1][1..]).unwrap().to_string(),
+            )
+        };
+
+        if kv.0 == "Host" {
+            request.host = kv.1;
+        } else {
+            request.headers.insert(kv.0.to_string(), kv.1);
+        }
+    }
+
+    request.body = str::from_utf8(body).unwrap().to_string();
+
+    request
 }
 
 #[derive(Default, Debug)]
@@ -75,6 +79,18 @@ enum HttpMethod {
     GET,
     POST,
     PUT,
+    UNKNOWN,
+}
+
+impl HttpMethod {
+    pub fn from_string(string: &str) -> Self {
+        match string {
+            "GET" => HttpMethod::GET,
+            "POST" => HttpMethod::POST,
+            "PUT" => HttpMethod::PUT,
+            _ => HttpMethod::UNKNOWN,
+        }
+    }
 }
 
 #[derive(Default, Debug)]
