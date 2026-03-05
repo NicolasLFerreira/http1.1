@@ -16,9 +16,9 @@ impl Client {
         GET /path HTTP/1.1\r\n\
         Host: example.com\r\n\
         Connection: keep-alive\r\n\
+        Content-Length: 3\r\n\
         \r\n\
-        This is something\r\n\
-        blah blah blah\r\n";
+        Abc";
 
         let bytes = str_to_bytes(request);
 

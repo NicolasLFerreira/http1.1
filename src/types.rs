@@ -21,16 +21,21 @@ impl HttpMethod {
 }
 
 #[derive(Default, Debug)]
-pub struct HttpRequestLine {
+pub struct HttpHeader {
     pub method: HttpMethod,
     pub path: String,
     pub version: String,
+    pub host: String,
+    pub headers: HashMap<String, String>,
+}
+
+#[derive(Default, Debug)]
+pub struct HttpBody {
+    pub body: String
 }
 
 #[derive(Default, Debug)]
 pub struct HttpRequest {
-    pub request_line: HttpRequestLine,
-    pub host: String,
-    pub headers: HashMap<String, String>,
-    pub body: String,
+    pub header: HttpHeader,
+    pub body: Option<HttpBody>
 }
