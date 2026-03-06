@@ -11,9 +11,9 @@ fn main() {
     GET /path HTTP/1.1\r\n\
     Host: example.com\r\n\
     Connection: keep-alive\r\n\
-    Content-Length: 3\r\n\
+    Content-Length: 55\r\n\
     \r\n\
-    Abc";
+    abc8192389123819238192381923819238192381938918381923812";
 
     if env::args().into_iter().len() > 1 {
         println!("Launching client");

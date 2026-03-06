@@ -1,5 +1,5 @@
 use crate::parser::{body_parser, header_parser};
-use crate::types::{HttpBody, HttpHeader, HttpRequest};
+use crate::types::{HttpHeader, HttpRequest};
 use std::io::Read;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::thread;
@@ -43,13 +43,11 @@ fn handle_connection(stream: TcpStream, addr: SocketAddr) {
 }
 
 fn handle_parsing(mut stream: TcpStream) -> Result<HttpRequest, String> {
-    let header: HttpHeader;
-    let mut body: Option<HttpBody> = None;
-
     let mut buffer: Vec<u8> = Vec::new();
-    let mut temp = [0u8; 1024];
+    let mut temp = [0u8; 32];
 
     // Handle header
+    let header: HttpHeader;
     loop {
         let n = stream.read(&mut temp).unwrap();
         if n == 0 {
@@ -68,12 +66,13 @@ fn handle_parsing(mut stream: TcpStream) -> Result<HttpRequest, String> {
         }
     }
 
-    let (c_length, remaining): (usize, usize) = if let Some(c_length) = header.headers.get("Content-Length") {
-        let c_length = c_length.parse().unwrap();
-        (c_length, buffer.len().saturating_sub(c_length))
-    } else {
-        (0, 0)
-    };
+    let (c_length, remaining): (usize, usize) =
+        if let Some(c_length) = header.headers.get("Content-Length") {
+            let c_length = c_length.parse().unwrap();
+            (c_length, buffer.len().saturating_sub(c_length))
+        } else {
+            (0, 0)
+        };
 
     if remaining > 0 {
         let current = buffer.len();
@@ -81,7 +80,7 @@ fn handle_parsing(mut stream: TcpStream) -> Result<HttpRequest, String> {
         stream.read_exact(&mut buffer[current..]).unwrap();
     }
 
-    body = Some(body_parser(&buffer)?);
-    
+    let body = Some(body_parser(&buffer)?);
+
     Ok(HttpRequest { header, body })
 }
